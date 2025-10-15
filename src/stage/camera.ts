@@ -3,7 +3,7 @@ import { toRadians } from "../math_util";
 import { device, canvas, fovYDegrees, aspectRatio } from "../renderer";
 
 class CameraUniforms {
-    readonly buffer = new ArrayBuffer(16 * 4);
+    readonly buffer = new ArrayBuffer(208);
     private readonly floatView = new Float32Array(this.buffer);
 
     set viewProjMat(mat: Float32Array) {
@@ -14,6 +14,27 @@ class CameraUniforms {
     }
 
     // TODO-2: add extra functions to set values needed for light clustering here
+    set viewMat(mat: Float32Array) {
+        for (let i = 0; i < 16; i++) {
+            this.floatView[16 + i] = mat[i];
+        }
+    }
+
+    set invProjMat(mat: Float32Array) {
+        for (let i = 0; i < 16; i++) {
+            this.floatView[32 + i] = mat[i];
+        }
+    }
+
+    setScreenDimensions(width: number, height: number) {
+        this.floatView[48] = width;
+        this.floatView[49] = height;
+    }
+
+    setNearFar(near: number, far: number) {
+        this.floatView[50] = near;
+        this.floatView[51] = far;
+    }
 }
 
 export class Camera {
@@ -21,6 +42,7 @@ export class Camera {
     uniformsBuffer: GPUBuffer;
 
     projMat: Mat4 = mat4.create();
+    invProjMat: Mat4 = mat4.create();
     cameraPos: Vec3 = vec3.create(-7, 2, 0);
     cameraFront: Vec3 = vec3.create(0, 0, -1);
     cameraUp: Vec3 = vec3.create(0, 1, 0);
@@ -48,6 +70,10 @@ export class Camera {
         });
 
         this.projMat = mat4.perspective(toRadians(fovYDegrees), aspectRatio, Camera.nearPlane, Camera.farPlane);
+        this.invProjMat = mat4.invert(this.projMat);
+
+        this.uniforms.setScreenDimensions(canvas.width, canvas.height);
+        this.uniforms.setNearFar(Camera.nearPlane, Camera.farPlane);
 
         this.rotateCamera(0, 0); // set initial camera vectors
 
@@ -140,6 +166,8 @@ export class Camera {
         this.uniforms.viewProjMat = viewProjMat;
 
         // TODO-2: write to extra buffers needed for light clustering here
+        this.uniforms.viewMat = viewMat;
+        this.uniforms.invProjMat = this.invProjMat;
 
         // TODO-1.1: upload `this.uniforms.buffer` (host side) to `this.uniformsBuffer` (device side)
         // check `lights.ts` for examples of using `device.queue.writeBuffer()`
