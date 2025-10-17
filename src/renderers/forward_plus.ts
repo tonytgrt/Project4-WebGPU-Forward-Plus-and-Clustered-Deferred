@@ -41,7 +41,6 @@ export class ForwardPlusRenderer extends renderer.Renderer {
             ]
         });
 
-        // Create bind group
         this.sceneUniformsBindGroup = renderer.device.createBindGroup({
             label: "forward+ scene uniforms bind group",
             layout: this.sceneUniformsBindGroupLayout,
@@ -65,7 +64,6 @@ export class ForwardPlusRenderer extends renderer.Renderer {
             ]
         });
 
-        // Create depth texture
         this.depthTexture = renderer.device.createTexture({
             size: [renderer.canvas.width, renderer.canvas.height],
             format: "depth24plus",
@@ -73,7 +71,6 @@ export class ForwardPlusRenderer extends renderer.Renderer {
         });
         this.depthTextureView = this.depthTexture.createView();
 
-        // Create render pipeline
         this.pipeline = renderer.device.createRenderPipeline({
             layout: renderer.device.createPipelineLayout({
                 label: "forward+ pipeline layout",

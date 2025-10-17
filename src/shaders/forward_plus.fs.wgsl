@@ -23,12 +23,10 @@ fn main(in: FragmentInput) -> @location(0) vec4f
     }
 
     // Determine which cluster this fragment belongs to
-    // We need to compute view-space Z for depth clustering
     // Transform world position to view space
     let viewPos = cameraUniforms.viewMat * vec4f(in.pos, 1.0);
     let viewZ = viewPos.z;
 
-    // Get cluster index using screen position and view-space depth
     let clusterIdx = getClusterIndex(
         in.fragPos,
         viewZ,
@@ -38,12 +36,10 @@ fn main(in: FragmentInput) -> @location(0) vec4f
         cameraUniforms.farPlane
     );
 
-    // Retrieve light grid entry for this cluster
     let gridEntry = lightGrid[clusterIdx];
     let lightCount = gridEntry.count;
     let lightOffset = gridEntry.offset;
 
-    // Accumulate light contributions from lights in this cluster
     var totalLightContrib = vec3f(0.0, 0.0, 0.0);
 
     for (var i = 0u; i < lightCount; i++) {

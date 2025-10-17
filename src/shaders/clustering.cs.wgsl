@@ -57,13 +57,18 @@ fn main(@builtin(global_invocation_id) globalId: vec3u) {
 
     // Convert screen corners to NDC [-1, 1]
     // Note: Y-axis flip - screen Y=0 is top, NDC Y=+1 is top
+    // After flip: minScreen.y (smaller value) -> larger NDC Y
+    //             maxScreen.y (larger value) -> smaller NDC Y
+    let minScreenNDC_y = 1.0 - (maxScreen.y / screenHeight) * 2.0;  // min NDC Y
+    let maxScreenNDC_y = 1.0 - (minScreen.y / screenHeight) * 2.0;  // max NDC Y
+
     let minScreenNDC = vec2f(
         (minScreen.x / screenWidth) * 2.0 - 1.0,
-        1.0 - (minScreen.y / screenHeight) * 2.0
+        minScreenNDC_y
     );
     let maxScreenNDC = vec2f(
         (maxScreen.x / screenWidth) * 2.0 - 1.0,
-        1.0 - (maxScreen.y / screenHeight) * 2.0
+        maxScreenNDC_y
     );
 
     // Build the 4 corner points at near and far planes (8 points total)
@@ -114,6 +119,9 @@ fn main(@builtin(global_invocation_id) globalId: vec3u) {
     var lightCount = 0u;
     var lightIndices: array<u32, ${maxLightsPerCluster}>;
 
+    // Cluster center for distance-based prioritization
+    let clusterCenter = (minView + maxView) * 0.5;
+
     let numLights = lightSet.numLights;
     for (var lightIdx = 0u; lightIdx < numLights; lightIdx++) {
         let light = lightSet.lights[lightIdx];
@@ -129,6 +137,26 @@ fn main(@builtin(global_invocation_id) globalId: vec3u) {
             if (lightCount < ${maxLightsPerCluster}) {
                 lightIndices[lightCount] = lightIdx;
                 lightCount++;
+            } else {
+                // If we've hit the limit, replace the farthest light if this one is closer
+                let distToCenter = length(lightPosView - clusterCenter);
+
+                // Find the farthest light in our current list
+                var farthestIdx = 0u;
+                var farthestDist = 0.0;
+                for (var i = 0u; i < ${maxLightsPerCluster}; i++) {
+                    let existingLightPos = (cameraUniforms.viewMat * vec4f(lightSet.lights[lightIndices[i]].pos, 1.0)).xyz;
+                    let existingDist = length(existingLightPos - clusterCenter);
+                    if (existingDist > farthestDist) {
+                        farthestDist = existingDist;
+                        farthestIdx = i;
+                    }
+                }
+
+                // Replace if this light is closer
+                if (distToCenter < farthestDist) {
+                    lightIndices[farthestIdx] = lightIdx;
+                }
             }
         }
     }
