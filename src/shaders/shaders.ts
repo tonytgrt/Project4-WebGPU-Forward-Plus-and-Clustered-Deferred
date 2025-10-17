@@ -32,11 +32,12 @@ export const constants = {
 
     lightRadius: 2,
 
-    clusterX: 16,
-    clusterY: 9,
-    clusterZ: 24,
-    maxLightsPerCluster: 100,
-    clusteringWorkgroupSize: 64,
+    // Clustering constants
+    clusterWidth: 16,
+    clusterHeight: 9,
+    clusterDepth: 24,
+    maxLightsPerCluster: 1500,
+    clusteringWorkgroupSize: 6
 };
 
 // =================================

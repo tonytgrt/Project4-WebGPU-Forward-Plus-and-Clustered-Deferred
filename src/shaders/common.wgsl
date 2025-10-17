@@ -10,23 +10,33 @@ struct LightSet {
     lights: array<Light>
 }
 
-// TODO-2: you may want to create a ClusterSet struct similar to LightSet
+// Clustering structures
+struct AABB {
+    minPos: vec3f,
+    maxPos: vec3f
+}
+
 struct Cluster {
-    numLights: u32,
+    minBounds: vec3f,
+    maxBounds: vec3f,
+    lightCount: u32,
     lightIndices: array<u32, ${maxLightsPerCluster}>
 }
 
-struct ClusterSet {
-    clusters: array<Cluster, ${clusterX} * ${clusterY} * ${clusterZ}>
+// Light grid entry for each cluster
+struct LightGridEntry {
+    offset: u32,   // offset into global light index list
+    count: u32     // number of lights in this cluster
 }
 
 struct CameraUniforms {
-    // TODO-1.3: add an entry for the view proj mat (of type mat4x4f)
     viewProjMat: mat4x4f,
-    viewMat: mat4x4f,
     invProjMat: mat4x4f,
-    screenDimensions: vec2f,
-    nearFar: vec2f,
+    viewMat: mat4x4f,
+    screenWidth: f32,
+    screenHeight: f32,
+    nearPlane: f32,
+    farPlane: f32
 }
 
 // CHECKITOUT: this special attenuation function ensures lights don't affect geometry outside the maximum light radius
@@ -40,4 +50,45 @@ fn calculateLightContrib(light: Light, posWorld: vec3f, nor: vec3f) -> vec3f {
 
     let lambert = max(dot(nor, normalize(vecToLight)), 0.f);
     return light.color * lambert * rangeAttenuation(distToLight);
+}
+
+// Clustering utility functions
+fn screenToView(screenCoord: vec2f, depth: f32, invProj: mat4x4f) -> vec3f {
+    let ndc = vec4f(screenCoord.x, screenCoord.y, depth, 1.0);
+
+    var viewPos = invProj * ndc;
+    viewPos = viewPos / viewPos.w;
+
+    return viewPos.xyz;
+}
+
+fn getClusterIndex(fragCoord: vec4f, viewZ: f32, screenWidth: f32, screenHeight: f32, nearPlane: f32, farPlane: f32) -> u32 {
+    let clusterX = u32(floor(fragCoord.x / (screenWidth / f32(${clusterWidth}))));
+    let clusterY = u32(floor(fragCoord.y / (screenHeight / f32(${clusterHeight}))));
+
+    let zNear = nearPlane;
+    let zFar = farPlane;
+    let viewDepth = -viewZ; // view space Z is negative
+
+    // Exponential depth slicing: slice = log(z/near) / log(far/near) * numSlices
+    let clusterZ = u32(floor(log(viewDepth / zNear) / log(zFar / zNear) * f32(${clusterDepth})));
+    let clusterZClamped = clamp(clusterZ, 0u, ${clusterDepth} - 1u);
+
+    let clusterIdx = clusterX +
+                     clusterY * ${clusterWidth} +
+                     clusterZClamped * ${clusterWidth} * ${clusterHeight};
+
+    return clusterIdx;
+}
+
+fn getDepthSliceBounds(sliceIdx: u32, nearPlane: f32, farPlane: f32) -> vec2f {
+    // Exponential depth distribution
+    let zNear = nearPlane;
+    let zFar = farPlane;
+    let ratio = zFar / zNear;
+
+    let near = zNear * pow(ratio, f32(sliceIdx) / f32(${clusterDepth}));
+    let far = zNear * pow(ratio, f32(sliceIdx + 1u) / f32(${clusterDepth}));
+
+    return vec2f(near, far);
 }

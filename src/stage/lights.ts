@@ -28,8 +28,11 @@ export class Lights {
     moveLightsComputeBindGroup: GPUBindGroup;
     moveLightsComputePipeline: GPUComputePipeline;
 
-    // TODO-2: add layouts, pipelines, textures, etc. needed for light clustering here
-    clusterBuffer: GPUBuffer;
+    // Clustering resources
+    clusterAABBsBuffer: GPUBuffer;
+    lightGridBuffer: GPUBuffer;
+    globalLightIndexListBuffer: GPUBuffer;
+
     clusteringComputeBindGroupLayout: GPUBindGroupLayout;
     clusteringComputeBindGroup: GPUBindGroup;
     clusteringComputePipeline: GPUComputePipeline;
@@ -97,14 +100,25 @@ export class Lights {
             }
         });
 
-        // TODO-2: initialize layouts, pipelines, textures, etc. needed for light clustering here
-        const clustersCount = shaders.constants.clusterX * shaders.constants.clusterY * shaders.constants.clusterZ;
-        const bytesPerCluster = 4 + (shaders.constants.maxLightsPerCluster * 4); // 4 bytes per u32
-        const clusterBufferSize = clustersCount * bytesPerCluster;
-        
-        this.clusterBuffer = device.createBuffer({
-            label: "cluster buffer",
-            size: clusterBufferSize,
+        const totalClusters = shaders.constants.clusterWidth *
+                             shaders.constants.clusterHeight *
+                             shaders.constants.clusterDepth;
+
+        this.clusterAABBsBuffer = device.createBuffer({
+            label: "cluster AABBs",
+            size: totalClusters * 32, // 2 vec4f per AABB
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+        });
+
+        this.lightGridBuffer = device.createBuffer({
+            label: "light grid",
+            size: totalClusters * 8,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+        });
+
+        this.globalLightIndexListBuffer = device.createBuffer({
+            label: "global light index list",
+            size: totalClusters * shaders.constants.maxLightsPerCluster * 4, 
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
         });
 
@@ -121,8 +135,18 @@ export class Lights {
                     visibility: GPUShaderStage.COMPUTE,
                     buffer: { type: "read-only-storage" }
                 },
-                { // clusterSet
+                { // clusterAABBs
                     binding: 2,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: { type: "storage" }
+                },
+                { // lightGrid
+                    binding: 3,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: { type: "storage" }
+                },
+                { // globalLightIndexList
+                    binding: 4,
                     visibility: GPUShaderStage.COMPUTE,
                     buffer: { type: "storage" }
                 }
@@ -143,7 +167,15 @@ export class Lights {
                 },
                 {
                     binding: 2,
-                    resource: { buffer: this.clusterBuffer }
+                    resource: { buffer: this.clusterAABBsBuffer }
+                },
+                {
+                    binding: 3,
+                    resource: { buffer: this.lightGridBuffer }
+                },
+                {
+                    binding: 4,
+                    resource: { buffer: this.globalLightIndexListBuffer }
                 }
             ]
         });
@@ -179,19 +211,19 @@ export class Lights {
     }
 
     doLightClustering(encoder: GPUCommandEncoder) {
-        // TODO-2: run the light clustering compute pass(es) here
-        // implementing clustering here allows for reusing the code in both Forward+ and Clustered Deferred
         const computePass = encoder.beginComputePass({
-            label: "clustering compute pass"
+            label: "light clustering compute pass"
         });
-        
+
         computePass.setPipeline(this.clusteringComputePipeline);
         computePass.setBindGroup(0, this.clusteringComputeBindGroup);
-        
-        const totalClusters = shaders.constants.clusterX * shaders.constants.clusterY * shaders.constants.clusterZ;
-        const workgroupCount = Math.ceil(totalClusters / shaders.constants.clusteringWorkgroupSize);
-        computePass.dispatchWorkgroups(workgroupCount);
-        
+
+        const workgroupsX = Math.ceil(shaders.constants.clusterWidth / shaders.constants.clusteringWorkgroupSize);
+        const workgroupsY = Math.ceil(shaders.constants.clusterHeight / shaders.constants.clusteringWorkgroupSize);
+        const workgroupsZ = Math.ceil(shaders.constants.clusterDepth / shaders.constants.clusteringWorkgroupSize);
+
+        computePass.dispatchWorkgroups(workgroupsX, workgroupsY, workgroupsZ);
+
         computePass.end();
     }
 
