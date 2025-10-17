@@ -28,7 +28,14 @@ export class Lights {
     moveLightsComputeBindGroup: GPUBindGroup;
     moveLightsComputePipeline: GPUComputePipeline;
 
-    // TODO-2: add layouts, pipelines, textures, etc. needed for light clustering here
+    // Clustering resources
+    clusterAABBsBuffer: GPUBuffer;
+    lightGridBuffer: GPUBuffer;
+    globalLightIndexListBuffer: GPUBuffer;
+
+    clusteringComputeBindGroupLayout: GPUBindGroupLayout;
+    clusteringComputeBindGroup: GPUBindGroup;
+    clusteringComputePipeline: GPUComputePipeline;
 
     constructor(camera: Camera) {
         this.camera = camera;
@@ -93,7 +100,110 @@ export class Lights {
             }
         });
 
-        // TODO-2: initialize layouts, pipelines, textures, etc. needed for light clustering here
+        // Initialize clustering buffers
+        const totalClusters = shaders.constants.clusterWidth *
+                             shaders.constants.clusterHeight *
+                             shaders.constants.clusterDepth;
+
+        // Buffer for cluster AABBs (each AABB has min and max vec3f = 6 floats = 24 bytes)
+        // With padding, each AABB is 32 bytes (2 vec4f)
+        this.clusterAABBsBuffer = device.createBuffer({
+            label: "cluster AABBs",
+            size: totalClusters * 32, // 2 vec4f per AABB
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+        });
+
+        // Buffer for light grid (offset + count per cluster)
+        // Each entry is 2 u32 = 8 bytes
+        this.lightGridBuffer = device.createBuffer({
+            label: "light grid",
+            size: totalClusters * 8,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+        });
+
+        // Buffer for global light index list
+        // Each cluster can have up to maxLightsPerCluster lights
+        this.globalLightIndexListBuffer = device.createBuffer({
+            label: "global light index list",
+            size: totalClusters * shaders.constants.maxLightsPerCluster * 4, // u32 per index
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+        });
+
+        // Create clustering compute bind group layout
+        this.clusteringComputeBindGroupLayout = device.createBindGroupLayout({
+            label: "clustering compute bind group layout",
+            entries: [
+                { // camera uniforms
+                    binding: 0,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: { type: "uniform" }
+                },
+                { // lightSet
+                    binding: 1,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: { type: "read-only-storage" }
+                },
+                { // clusterAABBs
+                    binding: 2,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: { type: "storage" }
+                },
+                { // lightGrid
+                    binding: 3,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: { type: "storage" }
+                },
+                { // globalLightIndexList
+                    binding: 4,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: { type: "storage" }
+                }
+            ]
+        });
+
+        // Create clustering compute bind group
+        this.clusteringComputeBindGroup = device.createBindGroup({
+            label: "clustering compute bind group",
+            layout: this.clusteringComputeBindGroupLayout,
+            entries: [
+                {
+                    binding: 0,
+                    resource: { buffer: this.camera.uniformsBuffer }
+                },
+                {
+                    binding: 1,
+                    resource: { buffer: this.lightSetStorageBuffer }
+                },
+                {
+                    binding: 2,
+                    resource: { buffer: this.clusterAABBsBuffer }
+                },
+                {
+                    binding: 3,
+                    resource: { buffer: this.lightGridBuffer }
+                },
+                {
+                    binding: 4,
+                    resource: { buffer: this.globalLightIndexListBuffer }
+                }
+            ]
+        });
+
+        // Create clustering compute pipeline
+        this.clusteringComputePipeline = device.createComputePipeline({
+            label: "clustering compute pipeline",
+            layout: device.createPipelineLayout({
+                label: "clustering compute pipeline layout",
+                bindGroupLayouts: [ this.clusteringComputeBindGroupLayout ]
+            }),
+            compute: {
+                module: device.createShaderModule({
+                    label: "clustering compute shader",
+                    code: shaders.clusteringComputeSrc
+                }),
+                entryPoint: "main"
+            }
+        });
     }
 
     private populateLightsBuffer() {
@@ -111,8 +221,21 @@ export class Lights {
     }
 
     doLightClustering(encoder: GPUCommandEncoder) {
-        // TODO-2: run the light clustering compute pass(es) here
-        // implementing clustering here allows for reusing the code in both Forward+ and Clustered Deferred
+        const computePass = encoder.beginComputePass({
+            label: "light clustering compute pass"
+        });
+
+        computePass.setPipeline(this.clusteringComputePipeline);
+        computePass.setBindGroup(0, this.clusteringComputeBindGroup);
+
+        // Dispatch one thread per cluster
+        const workgroupsX = Math.ceil(shaders.constants.clusterWidth / shaders.constants.clusteringWorkgroupSize);
+        const workgroupsY = Math.ceil(shaders.constants.clusterHeight / shaders.constants.clusteringWorkgroupSize);
+        const workgroupsZ = Math.ceil(shaders.constants.clusterDepth / shaders.constants.clusteringWorkgroupSize);
+
+        computePass.dispatchWorkgroups(workgroupsX, workgroupsY, workgroupsZ);
+
+        computePass.end();
     }
 
     // CHECKITOUT: this is where the light movement compute shader is dispatched from the host
