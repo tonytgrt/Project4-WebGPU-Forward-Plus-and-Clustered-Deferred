@@ -100,36 +100,28 @@ export class Lights {
             }
         });
 
-        // Initialize clustering buffers
         const totalClusters = shaders.constants.clusterWidth *
                              shaders.constants.clusterHeight *
                              shaders.constants.clusterDepth;
 
-        // Buffer for cluster AABBs (each AABB has min and max vec3f = 6 floats = 24 bytes)
-        // With padding, each AABB is 32 bytes (2 vec4f)
         this.clusterAABBsBuffer = device.createBuffer({
             label: "cluster AABBs",
             size: totalClusters * 32, // 2 vec4f per AABB
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
         });
 
-        // Buffer for light grid (offset + count per cluster)
-        // Each entry is 2 u32 = 8 bytes
         this.lightGridBuffer = device.createBuffer({
             label: "light grid",
             size: totalClusters * 8,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
         });
 
-        // Buffer for global light index list
-        // Each cluster can have up to maxLightsPerCluster lights
         this.globalLightIndexListBuffer = device.createBuffer({
             label: "global light index list",
-            size: totalClusters * shaders.constants.maxLightsPerCluster * 4, // u32 per index
+            size: totalClusters * shaders.constants.maxLightsPerCluster * 4, 
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
         });
 
-        // Create clustering compute bind group layout
         this.clusteringComputeBindGroupLayout = device.createBindGroupLayout({
             label: "clustering compute bind group layout",
             entries: [
@@ -161,7 +153,6 @@ export class Lights {
             ]
         });
 
-        // Create clustering compute bind group
         this.clusteringComputeBindGroup = device.createBindGroup({
             label: "clustering compute bind group",
             layout: this.clusteringComputeBindGroupLayout,
@@ -189,7 +180,6 @@ export class Lights {
             ]
         });
 
-        // Create clustering compute pipeline
         this.clusteringComputePipeline = device.createComputePipeline({
             label: "clustering compute pipeline",
             layout: device.createPipelineLayout({
@@ -228,7 +218,6 @@ export class Lights {
         computePass.setPipeline(this.clusteringComputePipeline);
         computePass.setBindGroup(0, this.clusteringComputeBindGroup);
 
-        // Dispatch one thread per cluster
         const workgroupsX = Math.ceil(shaders.constants.clusterWidth / shaders.constants.clusteringWorkgroupSize);
         const workgroupsY = Math.ceil(shaders.constants.clusterHeight / shaders.constants.clusteringWorkgroupSize);
         const workgroupsZ = Math.ceil(shaders.constants.clusterDepth / shaders.constants.clusteringWorkgroupSize);

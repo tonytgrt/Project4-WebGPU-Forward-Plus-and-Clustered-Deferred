@@ -54,10 +54,8 @@ fn calculateLightContrib(light: Light, posWorld: vec3f, nor: vec3f) -> vec3f {
 
 // Clustering utility functions
 fn screenToView(screenCoord: vec2f, depth: f32, invProj: mat4x4f) -> vec3f {
-    // Convert screen coordinates to NDC
     let ndc = vec4f(screenCoord.x, screenCoord.y, depth, 1.0);
 
-    // Transform to view space
     var viewPos = invProj * ndc;
     viewPos = viewPos / viewPos.w;
 
@@ -65,11 +63,9 @@ fn screenToView(screenCoord: vec2f, depth: f32, invProj: mat4x4f) -> vec3f {
 }
 
 fn getClusterIndex(fragCoord: vec4f, viewZ: f32, screenWidth: f32, screenHeight: f32, nearPlane: f32, farPlane: f32) -> u32 {
-    // Calculate cluster X and Y from screen position
     let clusterX = u32(floor(fragCoord.x / (screenWidth / f32(${clusterWidth}))));
     let clusterY = u32(floor(fragCoord.y / (screenHeight / f32(${clusterHeight}))));
 
-    // Calculate cluster Z using exponential depth distribution
     let zNear = nearPlane;
     let zFar = farPlane;
     let viewDepth = -viewZ; // view space Z is negative
@@ -78,7 +74,6 @@ fn getClusterIndex(fragCoord: vec4f, viewZ: f32, screenWidth: f32, screenHeight:
     let clusterZ = u32(floor(log(viewDepth / zNear) / log(zFar / zNear) * f32(${clusterDepth})));
     let clusterZClamped = clamp(clusterZ, 0u, ${clusterDepth} - 1u);
 
-    // Compute 1D cluster index
     let clusterIdx = clusterX +
                      clusterY * ${clusterWidth} +
                      clusterZClamped * ${clusterWidth} * ${clusterHeight};

@@ -36,7 +36,7 @@ export const constants = {
     clusterWidth: 16,
     clusterHeight: 9,
     clusterDepth: 24,
-    maxLightsPerCluster: 500,
+    maxLightsPerCluster: 1500,
     clusteringWorkgroupSize: 6
 };
 
