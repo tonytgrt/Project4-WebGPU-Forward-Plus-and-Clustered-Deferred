@@ -101,6 +101,12 @@ export const vertexBufferLayout: GPUVertexBufferLayout = {
     ]
 };
 
+let frameTimeCallback: ((frameTime: number) => void) | null = null;
+
+export function setFrameTimeCallback(callback: ((frameTime: number) => void) | null) {
+    frameTimeCallback = callback;
+}
+
 export abstract class Renderer {
     protected scene: Scene;
     protected lights: Lights;
@@ -109,6 +115,7 @@ export abstract class Renderer {
     protected stats: Stats;
 
     private prevTime: number = 0;
+    private prevFrameTime: number = 0;
     private frameRequestId: number;
 
     constructor(stage: Stage) {
@@ -130,6 +137,7 @@ export abstract class Renderer {
     private onFrame(time: number) {
         if (this.prevTime == 0) {
             this.prevTime = time;
+            this.prevFrameTime = time;
         }
 
         let deltaTime = time - this.prevTime;
@@ -142,7 +150,16 @@ export abstract class Renderer {
 
         this.stats.end();
 
+        // Calculate actual frame time (time between frames)
+        const frameTime = time - this.prevFrameTime;
+
+        // Call frame time callback if registered
+        if (frameTimeCallback && this.prevFrameTime !== 0) {
+            frameTimeCallback(frameTime);
+        }
+
         this.prevTime = time;
+        this.prevFrameTime = time;
         this.frameRequestId = requestAnimationFrame((t) => this.onFrame(t));
     }
 }

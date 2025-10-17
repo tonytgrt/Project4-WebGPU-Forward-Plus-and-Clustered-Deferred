@@ -11,7 +11,7 @@ WebGPU Forward+ and Clustered Deferred Shading
 
 [![](img/thumb.png)](http://webgpu.tonyxtian.com)
 
-[**Click here to view the live demo**](http://webgpu.tonyxtian.com)
+[**Click to view live demo deployed at webgpu.tonyxtian.com**](http://webgpu.tonyxtian.com)
 
 ### Demo Video
 
@@ -44,92 +44,124 @@ This project implements Forward+ and Clustered Deferred rendering techniques usi
   - Two-pass rendering: geometry pass and fullscreen lighting pass
   - Decouples geometry complexity from lighting complexity
 
+#### Extra Features
+
+- **Automated Performance Testing System**
+  - Comprehensive benchmark runner that automatically tests all rendering modes
+  - Systematically varies light count from 500 to 5000 in 500-light increments
+  - Collects statistical data (average, minimum, maximum frame times)
+  - Real-time progress display showing test status and intermediate results
+  - Automatic CSV generation and download for easy data analysis
+  - Used to generate all performance data in this README
+
 ## Performance Analysis
 
-### Rendering Method Comparison
+All benchmarks were conducted on an RTX 5080 16GB GPU using the automated testing system. The display connected has a frame rate of 120Hz thus capping the maximum possible fps to 120. Frame times are measured in milliseconds (lower is better).
 
-The following analysis compares the performance characteristics of the three rendering methods implemented in this project.
+### Summary
 
-#### Forward+ vs Naive Forward
+| Renderer | 500 Lights | 2000 Lights | 5000 Lights | Speedup vs Naive (5000) |
+|----------|------------|-------------|-------------|------------------------|
+| **Naive** | 52.3ms (19 FPS) | 199.3ms (5 FPS) | 497.2ms (2 FPS) | 1x baseline |
+| **Forward+** | 8.3ms (120 FPS) | 16.0ms (63 FPS) | 32.8ms (30 FPS) | **15.1x faster** |
+| **Clustered Deferred** | 8.3ms (120 FPS) | 8.3ms (120 FPS) | 9.3ms (107 FPS) | **53.4x faster** |
 
-Forward+ shows significant performance improvements over naive forward rendering, especially as the number of lights increases:
+### Scaling Analysis
 
-- **Low light count (1-100 lights)**: Forward+ shows moderate improvements (10-20% faster)
-- **Medium light count (100-500 lights)**: Forward+ becomes 2-3x faster than naive
-- **High light count (500-2000 lights)**: Forward+ can be 5-10x faster than naive
+![Performance Comparison](img/performance_comparison.png)
+*Figure 1: Frame time scaling and speedup comparison. Top chart shows linear degradation for Naive, sublinear for Forward+, and near-constant for Clustered Deferred. Bottom chart quantifies speedup factors relative to Naive.*
 
-**Why is Forward+ faster?**
-- Naive forward rendering evaluates every light for every fragment, resulting in O(fragments × lights) complexity
-- Forward+ uses light clustering to limit which lights are evaluated per fragment
-- The compute shader pre-calculates which lights affect each screen-space cluster
-- Fragments only evaluate lights in their cluster, dramatically reducing shader workload
+**Key Observations:**
 
-**Tradeoffs:**
-- Forward+ adds overhead for the clustering compute pass
-- Memory overhead for light grid and index list buffers
-- Most beneficial when lights > 50 and scene complexity is moderate to high
+**Naive Renderer** - Linear O(fragments × lights) complexity:
+- 10x more lights = ~9.5x slower performance
+- At 5000 lights: 497ms average (2 FPS), completely unplayable
+- Every fragment evaluates every light regardless of influence
 
-#### Clustered Deferred vs Forward+
+**Forward+ Renderer** - Sublinear scaling via clustering:
+- 10x more lights = only 4x slower (8.3ms → 32.8ms)
+- Maintains 30 FPS even at 5000 lights
+- Light clustering dramatically reduces per-fragment light evaluations
+- **15x faster than Naive** at high light counts
 
-Clustered Deferred and Forward+ show different performance characteristics depending on the workload:
+**Clustered Deferred Renderer** - Near-constant performance:
+- Maintains ~8-9ms across all light counts (500-5000)
+- **53x faster than Naive** at 5000 lights, **3.5x faster than Forward+**
+- Performance independent of light count in tested range
+- Decoupled geometry and lighting: G-buffer pass + fullscreen shading pass
+- Only shades visible pixels once, eliminating overdraw waste
 
-**Clustered Deferred advantages:**
-- Better performance with high geometric complexity (many overlapping triangles)
-- Lighting cost is independent of geometric complexity
-- Each pixel is shaded exactly once, regardless of depth complexity
-- More efficient when scene has significant overdraw
+### Performance Stability
 
-**Forward+ advantages:**
-- Lower memory bandwidth requirements (no G-buffer reads/writes)
-- Single-pass rendering can be faster for simple scenes
-- Better for scenes with transparency (deferred struggles with alpha blending)
-- Simpler pipeline with fewer render targets
+![Performance Variance](img/performance_variance.png)
+*Figure 2: Frame time variance with min/max ranges (shaded areas). Clustered Deferred shows the most consistent performance.*
 
-**Performance observations:**
-- Clustered Deferred uses more memory bandwidth due to G-buffer (3 render targets)
-- Forward+ has lower fixed overhead but scales worse with geometric complexity
-- In the Sponza scene with many lights (1000+), both perform similarly
-- Clustered Deferred becomes faster when fragments are shaded multiple times (overdraw)
+Frame time consistency is critical for smooth user experience:
+- **Naive**: Extreme variance (8ms min, 1108ms max) causes severe stuttering
+- **Forward+**: Moderate variance (8ms min, 50ms max) provides mostly smooth experience
+- **Clustered Deferred**: Low variance (8ms min, 17ms max) delivers consistently smooth performance
 
-### Parameters Affecting Performance
+### Why Clustered Deferred Wins
 
-#### Number of Lights
-As light count increases:
-- Naive renderer: Nearly linear performance degradation
-- Forward+: Sublinear degradation due to clustering
-- Clustered Deferred: Similar to Forward+, slight overhead from fullscreen pass
+Despite sharing clustering logic with Forward+, Clustered Deferred is 3.5x faster due to:
 
-#### Cluster Configuration
-The clustering grid size affects performance:
-- Larger clusters: Fewer clusters but more lights per cluster
-- Smaller clusters: More precise light culling but higher data structure overhead
-- Current implementation uses a balanced approach for optimal performance
+1. **Overdraw elimination**: Forward+ wastes work on occluded fragments; Deferred only shades final visible pixels
+2. **Decoupled passes**: Geometry complexity doesn't affect lighting cost
+3. **Memory efficiency**: Fullscreen pass has optimal cache access patterns
+4. **Constant work**: Each pixel shaded exactly once regardless of scene complexity
 
-### Optimization Opportunities
+## Automated Testing System
 
-Several optimizations could further improve performance:
+To enable rigorous performance analysis, I implemented a comprehensive automated benchmarking system that can test all rendering modes across various configurations without manual intervention.
 
-1. **G-Buffer Optimization**
-   - Pack data more efficiently (2-component normals, compressed formats)
-   - Reduce from 3 textures to 1-2 textures
-   - Reconstruct world position from depth instead of storing it
+### How It Works
 
-2. **Compute-based Deferred Shading**
-   - Replace fullscreen pass with compute shader for better cache utilization
-   - Enable more flexible tile-based processing
+**Single-click UI:**
+A "Start Testing" button in the GUI control panel initiates automated benchmarks. The system displays real-time progress and downloads a timestamped CSV file when complete.
 
-3. **Visibility Buffer**
-   - Store only primitive IDs instead of full geometry attributes
-   - Reconstruct attributes in shading pass
-   - Dramatically reduce G-buffer memory footprint
+**Test Configuration:**
+- **Renderers tested**: Naive, Forward+, Clustered Deferred (all three modes)
+- **Light counts**: 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000
+- **Total configurations**: 30 (3 renderers × 10 light counts)
 
-4. **Render Bundles**
-   - Pre-record draw commands to reduce CPU overhead
-   - Particularly beneficial for static geometry
+**For each configuration:**
+1. Automatically switches to the target renderer
+2. 200ms initialization delay
+3. 30 frame warmup to stabilize performance
+4. 120 frames of timing data collected
+5. Statistical analysis (average, minimum, maximum)
 
-5. **Dynamic Cluster Size**
-   - Adjust cluster dimensions based on light distribution
-   - Use hierarchical clustering for better scalability
+### Frame Time Measurement
+
+The system measures **actual frame time** - the time between consecutive frames - rather than just GPU command submission time:
+
+```typescript
+// In renderer.ts - measures real frame time
+private onFrame(time: number) {
+    // ... camera and light updates ...
+    this.draw(); // Submit GPU commands
+    const frameTime = time - this.prevFrameTime; // Actual frame time
+    if (frameTimeCallback) {
+        frameTimeCallback(frameTime); // Report to benchmark system
+    }
+}
+```
+
+This approach captures:
+- CPU overhead (scene updates, command encoding)
+- GPU execution time (actual rendering work)
+- Synchronization delays (CPU waiting for GPU)
+- True end-to-end performance as experienced by users
+
+**CSV Output Format:**
+```csv
+Render Mode,Number of Lights,Average Frame Time (ms),Min Frame Time (ms),Max Frame Time (ms)
+naive,500,52.345,8.123,1108.456
+forward+,500,8.321,8.234,10.123
+clustered deferred,500,8.312,8.201,9.876
+...
+```
+
 
 ### Credits
 

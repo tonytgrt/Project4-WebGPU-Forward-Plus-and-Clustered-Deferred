@@ -1,0 +1,31 @@
+Render Mode,Number of Lights,Average Frame Time (ms),Min Frame Time (ms),Max Frame Time (ms)
+naive,500,52.292,8.100,366.900
+naive,1000,99.167,8.100,350.100
+naive,1500,148.540,58.300,233.400
+naive,2000,199.304,8.300,424.800
+naive,2500,247.012,233.200,258.500
+naive,3000,292.288,8.100,891.400
+naive,3500,347.636,8.300,1041.700
+naive,4000,398.124,8.200,841.600
+naive,4500,448.539,8.400,883.400
+naive,5000,497.218,8.200,1108.400
+forward+,500,8.334,8.100,8.600
+forward+,1000,8.332,8.100,8.500
+forward+,1500,9.930,8.000,16.900
+forward+,2000,15.972,8.200,25.100
+forward+,2500,16.318,8.200,25.100
+forward+,3000,22.777,16.400,33.300
+forward+,3500,23.403,16.500,33.500
+forward+,4000,25.764,16.400,33.600
+forward+,4500,29.931,24.800,41.700
+forward+,5000,32.847,24.900,50.000
+clustered deferred,500,8.333,8.100,8.600
+clustered deferred,1000,8.333,8.100,8.600
+clustered deferred,1500,8.333,8.100,8.600
+clustered deferred,2000,8.333,8.100,8.700
+clustered deferred,2500,8.541,8.000,33.300
+clustered deferred,3000,9.722,8.100,175.000
+clustered deferred,3500,8.333,8.000,8.600
+clustered deferred,4000,9.861,8.200,16.700
+clustered deferred,4500,9.376,8.100,16.800
+clustered deferred,5000,9.306,8.200,16.800
