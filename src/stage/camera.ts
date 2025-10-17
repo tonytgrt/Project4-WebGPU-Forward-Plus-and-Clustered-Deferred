@@ -77,9 +77,6 @@ export class Camera {
         this.projMat = mat4.perspective(toRadians(fovYDegrees), aspectRatio, Camera.nearPlane, Camera.farPlane);
         this.invProjMat = mat4.invert(this.projMat);
 
-        this.uniforms.setScreenDimensions(canvas.width, canvas.height);
-        this.uniforms.setNearFar(Camera.nearPlane, Camera.farPlane);
-
         this.rotateCamera(0, 0); // set initial camera vectors
 
         window.addEventListener('keydown', (event) => this.onKeyEvent(event, true));
